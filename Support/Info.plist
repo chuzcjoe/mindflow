@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>MindFlow</string>
+    <key>CFBundleIdentifier</key><string>dev.mindflow.mac</string>
+    <key>CFBundleName</key><string>MindFlow</string>
+    <key>CFBundleDisplayName</key><string>MindFlow</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.6.0</string>
+    <key>CFBundleVersion</key><string>6</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>MindFlow 需要使用麦克风录制你说的话，并在本机转换为文字。录音在转写结束后自动删除。</string>
+    <key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>
+    <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
+</dict>
+</plist>
