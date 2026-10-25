@@ -1,6 +1,6 @@
 # MindFlow
 
-MindFlow is a native macOS and iOS speech-to-text app powered by the SenseVoiceSmall INT8 model. It automatically recognizes Mandarin Chinese and English. Both platforms share the model, audio reading, and transcription pipeline, with interfaces tailored to desktop and mobile use.
+MindFlow is a native speech-to-text app for macOS and iOS, powered by the SenseVoiceSmall INT8 model. It automatically recognizes Mandarin Chinese and English. Both platforms share the model, audio reading, and transcription pipeline, with interfaces tailored to desktop and mobile use.
 
 ## iOS
 
