@@ -3,6 +3,33 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
+# Keep a certificate-based identity across updates so macOS can recognize the
+# next build as the same app when checking privacy grants. Ad-hoc signing uses
+# a changing code hash and is available only as an explicit development choice.
+SIGNING_IDENTITY="${MINDFLOW_CODESIGN_IDENTITY:-}"
+if [ -z "$SIGNING_IDENTITY" ]; then
+    SIGNING_IDENTITY="$(python3 - <<'PY'
+import re
+import subprocess
+import sys
+
+result = subprocess.run(['/usr/bin/security', 'find-identity', '-v', '-p', 'codesigning'],
+                        capture_output=True, text=True, check=True)
+identities = re.findall(r'\b([0-9A-F]{40})\b\s+"Apple Development:[^"]+"', result.stdout)
+if len(identities) != 1:
+    print('Select a stable signing identity with MINDFLOW_CODESIGN_IDENTITY '
+          '(certificate name or SHA-1 fingerprint). Expected one valid Apple Development identity; '
+          f'found {len(identities)}. For explicit ad-hoc development only, set it to -; '
+          'privacy permissions may need to be granted again after every update.', file=sys.stderr)
+    sys.exit(1)
+print(identities[0])
+PY
+)"
+fi
+if [ "$SIGNING_IDENTITY" = - ]; then
+    echo "Warning: ad-hoc signing can invalidate microphone and Accessibility grants after updates." >&2
+fi
+
 CONFIGURATION="${1:-release}"
 swift build -c "$CONFIGURATION" --product MindFlow
 BIN_DIR="$(swift build -c "$CONFIGURATION" --show-bin-path)"
@@ -26,7 +53,7 @@ while IFS= read -r -d '' RESOURCE; do
     cp -R "$RESOURCE" "$APP_DIR/Contents/Resources/"
 done < <(find "$BIN_DIR" -maxdepth 1 -name '*.bundle' -print0)
 
-codesign --force --sign - --entitlements Support/MindFlow.entitlements "$APP_DIR"
+codesign --force --sign "$SIGNING_IDENTITY" --timestamp=none --entitlements Support/MindFlow.entitlements "$APP_DIR"
 codesign --verify --deep --strict "$APP_DIR"
 
 # Publish a complete bundle in one filesystem operation. This also allows a

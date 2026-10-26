@@ -28,7 +28,8 @@ struct MindFlowApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: DictationController?
-    private let shortcut = RecordingShortcutHandler(prepareInsertion: {
+    private let recordingIndicator = RecordingIndicator()
+    private lazy var shortcut = RecordingShortcutHandler(recordingIndicator: recordingIndicator, prepareInsertion: {
         CursorTextInsertion.shared.prepareInsertion()
     })
 
@@ -46,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         KeyboardShortcuts.removeAllHandlers()
+        shortcut.disconnect()
         controller?.shutDown()
     }
 }

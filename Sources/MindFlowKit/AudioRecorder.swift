@@ -12,13 +12,11 @@ public protocol AudioRecording: AnyObject {
     func discard()
 }
 
+#if !os(iOS)
 @MainActor
 public final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
     private var recordingURL: URL?
-    #if os(iOS)
-    private var sessionIsActive = false
-    #endif
     public var onFailure: ((Error) -> Void)?
 
     public var currentTime: TimeInterval { recorder?.currentTime ?? 0 }
@@ -41,12 +39,6 @@ public final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDeleg
 
     public func start() throws {
         discard()
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement)
-        try session.setActive(true)
-        sessionIsActive = true
-        #endif
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mindflow-\(UUID().uuidString).wav")
         let settings: [String: Any] = [
@@ -80,7 +72,6 @@ public final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDeleg
         recorder.delegate = nil
         self.recorder = nil
         recordingURL = nil
-        deactivateSession()
         return url
     }
 
@@ -90,15 +81,6 @@ public final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDeleg
         recorder = nil
         if let recordingURL { try? FileManager.default.removeItem(at: recordingURL) }
         recordingURL = nil
-        deactivateSession()
-    }
-
-    private func deactivateSession() {
-        #if os(iOS)
-        guard sessionIsActive else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        sessionIsActive = false
-        #endif
     }
 
     public nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
@@ -114,3 +96,4 @@ public final class AudioRecorder: NSObject, AudioRecording, AVAudioRecorderDeleg
         }
     }
 }
+#endif

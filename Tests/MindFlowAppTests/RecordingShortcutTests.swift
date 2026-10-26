@@ -5,6 +5,119 @@ import Testing
 
 @Suite @MainActor
 struct RecordingShortcutTests {
+    @Test(.timeLimit(.minutes(1)))
+    func testIndicatorWaitsForRealRecordingAndHidesBeforeTranscription() async throws {
+        var keyUp: RecordingShortcutHandler.Action?
+        let indicator = ShortcutIndicatorSpy()
+        let handler = RecordingShortcutHandler(recordingIndicator: indicator, register: { keyUp = $0 })
+        let recorder = ShortcutTestRecorder()
+        recorder.holdPermission = true
+        let transcriber = ShortcutTestTranscriber(onTranscribe: { #expect(!indicator.isVisible) })
+        let controller = DictationController(transcriber: transcriber, recorder: recorder)
+        await controller.prepare()
+        handler.connect(to: controller)
+        let action = try #require(keyUp)
+        let pending = Task { await action() }
+        await recorder.waitForPermissionRequest()
+        #expect(!indicator.isVisible)
+        recorder.grantPermission()
+        await pending.value
+        #expect(indicator.isVisible)
+        #expect(indicator.showCount == 1)
+        await action()
+        #expect(!indicator.isVisible)
+        #expect(indicator.hideCount == 1)
+        #expect(controller.phase == .ready)
+    }
+
+    @Test(arguments: ["permissionDenied", "startFailed"])
+    func testIndicatorNeverAppearsWhenCaptureCannotStart(_ failure: String) async throws {
+        var keyUp: RecordingShortcutHandler.Action?
+        let indicator = ShortcutIndicatorSpy()
+        let handler = RecordingShortcutHandler(recordingIndicator: indicator, register: { keyUp = $0 })
+        let recorder = ShortcutTestRecorder()
+        recorder.permissionGranted = failure != "permissionDenied"
+        recorder.failStart = failure == "startFailed"
+        let controller = DictationController(transcriber: ShortcutTestTranscriber(), recorder: recorder)
+        await controller.prepare()
+        handler.connect(to: controller)
+        let action = try #require(keyUp)
+        await action()
+        #expect(controller.phase == .ready)
+        #expect(controller.errorMessage != nil)
+        #expect(!indicator.isVisible)
+        #expect(indicator.showCount == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func testButtonRecordingDoesNotShowIndicatorAndButtonStopDismissesShortcutIndicator() async throws {
+        var keyUp: RecordingShortcutHandler.Action?
+        let indicator = ShortcutIndicatorSpy()
+        let handler = RecordingShortcutHandler(recordingIndicator: indicator, register: { keyUp = $0 })
+        let controller = DictationController(transcriber: ShortcutTestTranscriber(), recorder: ShortcutTestRecorder())
+        await controller.prepare()
+        handler.connect(to: controller)
+        let action = try #require(keyUp)
+        await controller.toggleRecording()
+        #expect(!indicator.isVisible)
+        await action()
+        #expect(indicator.showCount == 0)
+        await action()
+        #expect(indicator.isVisible)
+        await controller.toggleRecording()
+        await indicator.waitUntilHidden()
+        #expect(indicator.hideCount == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: ["cancel", "captureFailure", "shutdown"])
+    func testIndicatorIsDismissedWhenRecordingIsInterrupted(_ interruption: String) async throws {
+        var keyUp: RecordingShortcutHandler.Action?
+        let indicator = ShortcutIndicatorSpy()
+        let handler = RecordingShortcutHandler(recordingIndicator: indicator, register: { keyUp = $0 })
+        let recorder = ShortcutTestRecorder()
+        let controller = DictationController(transcriber: ShortcutTestTranscriber(), recorder: recorder)
+        await controller.prepare()
+        handler.connect(to: controller)
+        let action = try #require(keyUp)
+        await action()
+        #expect(indicator.isVisible)
+        switch interruption {
+        case "cancel": controller.cancelRecording()
+        case "captureFailure": recorder.onFailure?(URLError(.cannotOpenFile))
+        default: controller.shutDown()
+        }
+        await indicator.waitUntilHidden()
+        #expect(indicator.hideCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: recorder.url.path))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func testLatePermissionCannotShowIndicatorForReplacedControllerAndDisconnectHidesIt() async throws {
+        var keyUp: RecordingShortcutHandler.Action?
+        let indicator = ShortcutIndicatorSpy()
+        let handler = RecordingShortcutHandler(recordingIndicator: indicator, register: { keyUp = $0 })
+        let recorder = ShortcutTestRecorder()
+        recorder.holdPermission = true
+        let first = DictationController(transcriber: ShortcutTestTranscriber(), recorder: recorder)
+        let second = DictationController(transcriber: ShortcutTestTranscriber(), recorder: ShortcutTestRecorder())
+        await first.prepare()
+        await second.prepare()
+        handler.connect(to: first)
+        let action = try #require(keyUp)
+        let pending = Task { await action() }
+        await recorder.waitForPermissionRequest()
+        handler.connect(to: second)
+        recorder.grantPermission()
+        await pending.value
+        #expect(indicator.showCount == 0)
+        first.shutDown()
+        await action()
+        #expect(indicator.isVisible)
+        handler.disconnect()
+        #expect(!indicator.isVisible)
+        second.shutDown()
+    }
+
     @Test
     func testShortcutCapturesInputOnlyOnStopAndInsertsEverySuccessfulResult() async throws {
         var keyUp: RecordingShortcutHandler.Action?
@@ -158,9 +271,14 @@ struct RecordingShortcutTests {
 
 private actor ShortcutTestTranscriber: SpeechTranscribing {
     private var fails = false
+    private let onTranscribe: @MainActor @Sendable () -> Void
+    init(onTranscribe: @escaping @MainActor @Sendable () -> Void = {}) {
+        self.onTranscribe = onTranscribe
+    }
     func failNextTranscription() { fails = true }
     func prepare(progress: @escaping @Sendable (ModelPreparation) -> Void) async throws { }
     func transcribe(audioURL: URL) async throws -> String {
+        await onTranscribe()
         if fails { throw URLError(.cannotDecodeContentData) }
         return "快捷键转写成功"
     }
@@ -174,13 +292,15 @@ private final class ShortcutTestRecorder: AudioRecording {
     var starts = 0
     var permissionRequests = 0
     var holdPermission = false
+    var permissionGranted = true
+    var failStart = false
     private var permissionCompletion: CheckedContinuation<Bool, Never>?
     private var permissionWaiter: CheckedContinuation<Void, Never>?
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("mindflow-shortcut-test-\(UUID().uuidString).wav")
 
     func requestPermission() async -> Bool {
         permissionRequests += 1
-        guard holdPermission else { return true }
+        guard holdPermission else { return permissionGranted }
         return await withCheckedContinuation { continuation in
             permissionCompletion = continuation
             permissionWaiter?.resume()
@@ -197,8 +317,35 @@ private final class ShortcutTestRecorder: AudioRecording {
     }
     func start() throws {
         starts += 1
+        if failStart { throw URLError(.cannotCreateFile) }
         try Data("test recording".utf8).write(to: url)
     }
     func stop() throws -> URL { url }
     func discard() { try? FileManager.default.removeItem(at: url) }
+}
+
+@MainActor
+private final class ShortcutIndicatorSpy: RecordingIndicatorPresenting {
+    private(set) var isVisible = false
+    private(set) var showCount = 0
+    private(set) var hideCount = 0
+    private var hideWaiter: CheckedContinuation<Void, Never>?
+
+    func show(for controller: DictationController) {
+        #expect(controller.phase == .recording)
+        isVisible = true
+        showCount += 1
+    }
+
+    func hide() {
+        isVisible = false
+        hideCount += 1
+        hideWaiter?.resume()
+        hideWaiter = nil
+    }
+
+    func waitUntilHidden() async {
+        guard isVisible else { return }
+        await withCheckedContinuation { hideWaiter = $0 }
+    }
 }

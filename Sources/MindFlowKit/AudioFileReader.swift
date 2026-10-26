@@ -5,12 +5,19 @@ import Foundation
 enum AudioFileReader {
     static func samples(from url: URL) throws -> [Float] {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
+        AudioDiagnostics.write("source-audio", [
+            "fileBytes": (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0,
+            "sourceFrames": file.length,
+            "sampleRate": file.processingFormat.sampleRate,
+            "channels": file.processingFormat.channelCount,
+        ])
         guard file.length > 0 else { return [] }
         guard file.length <= Int64(UInt32.max),
               let input = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
             throw AudioFileError.invalidAudio
         }
         try readAllFrames(from: file, into: input)
+        AudioDiagnostics.write("decoded-audio", ["framesRead": input.frameLength])
 
         if file.processingFormat.sampleRate == 16_000, file.processingFormat.channelCount == 1 {
             return try copySamples(input)
@@ -37,6 +44,7 @@ enum AudioFileReader {
             return input
         }
         if let error { throw error }
+        AudioDiagnostics.write("resampling", ["status": status.rawValue, "outputFrames": output.frameLength])
         guard status != .error else { throw AudioFileError.invalidAudio }
         return try copySamples(output)
     }

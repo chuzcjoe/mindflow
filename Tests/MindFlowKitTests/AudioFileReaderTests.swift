@@ -5,6 +5,32 @@ import Testing
 
 struct AudioFileReaderTests {
     @Test
+    func testHardwareRatePCM16RecordingConvertsWithoutLosingSignal() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("mindflow-hardware-pcm-\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let format = try #require(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false))
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000))
+        buffer.frameLength = 48_000
+        let channel = try #require(buffer.floatChannelData?[0])
+        for i in 0..<48_000 { channel[i] = Float(sin(Double(i) * 2 * .pi * 440 / 48_000)) * 0.25 }
+        try autoreleasepool {
+            let file = try AVAudioFile(forWriting: url, settings: [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVSampleRateKey: 48_000.0,
+                AVNumberOfChannelsKey: 1,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+            ], commonFormat: .pcmFormatFloat32, interleaved: false)
+            try file.write(from: buffer)
+            if #available(macOS 15.0, iOS 18.0, *) { file.close() }
+        }
+        let samples = try AudioFileReader.samples(from: url)
+        #expect(abs(samples.count - 16_000) <= 2)
+        let peak = samples.map { abs($0) }.max() ?? 0
+        #expect(peak > 0.2 && peak < 0.3)
+    }
+
+    @Test
     func testNativeRecordingPreservesNormalizedSamples() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("mindflow-pcm-\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: url) }

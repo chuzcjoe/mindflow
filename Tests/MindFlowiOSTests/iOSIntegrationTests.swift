@@ -34,15 +34,18 @@ final class iOSIntegrationTests: XCTestCase {
         XCTAssertTrue(granted, "Allow microphone access for the simulator test host.")
         guard granted else { return }
         try recorder.start()
-        XCTAssertEqual(AVAudioSession.sharedInstance().category, .record)
+        XCTAssertEqual(AVAudioSession.sharedInstance().category, .playAndRecord)
+        let hardwareRate = AVAudioSession.sharedInstance().sampleRate
         try await Task.sleep(for: .milliseconds(600))
         XCTAssertGreaterThan(recorder.currentTime, 0.3)
         let url = try recorder.stop()
         defer { try? FileManager.default.removeItem(at: url) }
         let file = try AVAudioFile(forReading: url)
-        XCTAssertEqual(file.processingFormat.sampleRate, 16_000)
+        XCTAssertEqual(file.processingFormat.sampleRate, hardwareRate)
         XCTAssertEqual(file.processingFormat.channelCount, 1)
         XCTAssertGreaterThan(file.length, 4_800)
+        let samples = try AudioFileReader.samples(from: url)
+        XCTAssertEqual(Double(samples.count), Double(file.length) * 16_000 / hardwareRate, accuracy: 2)
         try recorder.start()
         recorder.discard()
     }

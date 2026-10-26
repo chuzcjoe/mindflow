@@ -1,0 +1,12 @@
+Generated with the built-in imagegen tool on 2026-10-25.
+Master artwork: MindFlow-iOS-master.png
+App asset: Sources/MindFlowiOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+Rebuild asset: swift scripts/make-ios-icon.swift
+
+Use case: logo-brand.
+Asset type: final iOS app icon artwork for MindFlow, a Mandarin and English voice-to-text app. Create a single square 1024 x 1024 icon image, not a mockup or an icon sheet.
+Design: a refined, tactile sound-wave emblem made of five generously rounded vertical capsule bars. The middle bar is tallest, adjacent bars medium height, outer bars short, forming one balanced, recognizable voice waveform. The emblem should feel fluid, calm and exceptionally clear at small home-screen sizes.
+Background: full-bleed deep forest-green to luminous emerald gradient, with a subtle soft mint glow behind the central mark. The background fills the entire square and all four corners.
+Foreground: warm ivory, pearl-white sculpted bars with subtle frosted-glass edges and delicate mint reflections. Soft dimensional highlights, restrained beveling and gentle contact shadows create a beautifully crafted premium iOS appearance. Strong readable silhouette, generous negative space, precise spacing. Nearly front-on view with very subtle depth, not a tilted object photograph.
+Composition: centered mark occupying approximately 58 percent of the canvas width and height, well clear of iOS corner masks. Smooth surfaces, elegant lighting, crisp clean edges.
+Constraints: no text, no letters, no words, no microphone illustration, no extra symbols, no decorative particles, no watermark. No device frame, no external white margin, no pre-rounded outer corners, no nested app-icon tile. Fully opaque square background.

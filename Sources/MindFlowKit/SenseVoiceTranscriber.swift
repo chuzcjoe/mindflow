@@ -68,7 +68,8 @@ public actor SenseVoiceTranscriber: SpeechTranscribing {
     public func transcribe(audioURL: URL) async throws -> String {
         guard let engine else { throw DictationError.modelNotReady }
         let samples = try AudioFileReader.samples(from: audioURL)
-        guard !samples.isEmpty else { return "" }
+        AudioDiagnostics.input(samples)
+        guard samples.contains(where: { $0 != 0 }) else { throw DictationError.silentRecording }
         // Bound the attention workload for longer recordings. Split near a quiet
         // boundary when possible, so word endings are not cut at a fixed interval.
         let chunks = Self.splitSamples(samples)
@@ -80,7 +81,9 @@ public actor SenseVoiceTranscriber: SpeechTranscribing {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty { texts.append(text) }
         }
-        return texts.joined(separator: " ")
+        let text = texts.joined(separator: " ")
+        AudioDiagnostics.write("recognition-output", ["characterCount": text.count])
+        return text
     }
 
     private static func isValid(_ url: URL, bytes: Int, digest: String) -> Bool {
